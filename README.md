@@ -114,66 +114,57 @@ Create a Topic named `topic-conversations-3`:
 Create a Subscription named `topic-conversations-3-sub`:
 ![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/c748f3787b2efc645a77e8aef378ac40b25319b0/Pub-Sub%20Subscription.png)
 
-# 🔊 Sending Data to Pub/Sub
-We have several options for transmitting data from the bucket to Pub/Sub:
-- Export the data directly from the bucket to Pub/Sub.
+# Publishing Data to Pub/Sub
 
-![1 YXSdUQNBLiDKkxVOyoMt3A](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/b00eb19d-2d0c-457a-af7f-7923fe8ab679)
+The Python script `send-data-to-pubsub.py` publishes messages from a file to a Pub/Sub topic. It reads each line of a JSON file stored in Google Cloud Storage, encodes the data, and publishes it to a specified Pub/Sub topic at 1-second intervals.
 
-- Import the data directly from the topic to Pub/Sub.
+---
 
-![1 IMJXLiuBm0VZlZ3nH0C5ew](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/d08dff32-6a5f-4207-a9f4-209ca5d800ae)
+### Key Steps:
 
-Both methods involve initiating a Dataflow batch job and utilizing the 'Cloud Storage Text File to Pub/Sub (Batch)' template. However, these options are most suitable for handling smaller datasets.
+1. **Initialize Clients**:
+   - Use `pubsub_v1.PublisherClient` to interact with Pub/Sub.
+   - Use `storage.Client` to access the JSON file stored in a GCS bucket.
 
-If you're working with larger data volumes, alternative methods are required to efficiently send data to Pub/Sub. In such cases, I recommend employing Python code. This approach is more effective for managing and processing substantial amounts of data.
+2. **Read File**:
+   - The script retrieves the specified file (`conversations.json`) from a GCS bucket.
 
-Execute the code by running the command `python send-data-to-pubsub.py` in your first terminal. Ensure to provide the necessary parameters: topic path, bucket name, and file name.
+3. **Publish Messages**:
+   - Each line in the file is read, encoded to a bytestring, and published to the specified Pub/Sub topic.
 
-![20240406_201746](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/33fcace5-3f6e-4942-8806-2d476ffee20b)
+4. **Add Delay**:
+   - A 1-second delay between publishing each message simulates streaming data.
 
+---
 
-# <img width="40" alt="image" src="https://beam.apache.org/images/mascot/beam_mascot_500x500.png"> Streaming Apache Beam/Dataflow pipeline
+# Streaming Dataflow Pipeline
 
-Apache Beam is a versatile framework that offers flexibility for both batch and streaming data processing, making it a widely applicable tool in various use cases.
+The Python script `streaming-dataflow-pipeline.py` processes streaming data from Pub/Sub and writes the transformed data into BigQuery tables. The pipeline is built using Apache Beam and deployed using Google Cloud Dataflow, enabling real-time data processing and storage.
 
-The [Direct Runner](https://beam.apache.org/documentation/runners/direct/) executes pipelines on your machine and is designed to validate that pipelines adhere to the Apache Beam model as closely as possible. Using the Direct Runner for testing and development helps ensure that pipelines are robust across different Beam runners. The Direct Runner is not designed for production pipelines, because it's optimized for correctness rather than performance.
+---
 
-The Google Cloud [Dataflow Runner](https://beam.apache.org/documentation/runners/dataflow/) uses the Cloud Dataflow managed service. When you run your pipeline with the Cloud Dataflow service, the runner uploads your executable code and dependencies to a Google Cloud Storage bucket and creates a Cloud Dataflow job, which executes your pipeline on managed resources in Google Cloud Platform.
+### Key Steps:
 
-Transforming your Apache Beam pipeline from DirectRunner to DataflowRunner for creating a Dataflow job is a straightforward process that requires just a few modifications. The `job_name` and other lines after it in the following code are optional. However, you may want to consider adjusting the number of workers to enhance the job's performance. For more information on Pipeline options, refer to [this documentation](https://cloud.google.com/dataflow/docs/reference/pipeline-options#python).
+1. **Ingest Data**:
+   - The pipeline reads real-time messages from a **Pub/Sub subscription**.
 
-If you want to specify a Service account, make sure it has these roles: BigQuery Admin, Dataflow Worker, Pub/Sub Admin, Storage Object Viewer.
+2. **Parse and Transform**:
+   - JSON messages are converted into Python dictionaries for processing.
+   - Messages are split into two datasets:
+     - **Conversations**: Extracts and filters relevant fields for the `conversations` table.
+     - **Orders**: Extracts and filters relevant fields for the `orders` table.
 
-```python
-<...>
-#Define your Dataflow pipeline options
-options = PipelineOptions(
-    runner='DirectRunner',     #for Dataflow job change to DataflowRunner
-    project='your-project-id',
-    region='US',     #for Dataflow job change to e.g. us-west1
-    temp_location='gs://your-bucket/temp',
-    staging_location='gs://your-bucket/staging',
-    streaming=True,    #Enable streaming mode
-    #Dataflow parameters that are optional
-    #job_name='streaming-conversations'   
-    #num_workers=5,    
-    #max_num_workers=10,    
-    #disk_size_gb=100,    
-    #autoscaling_algorithm='THROUGHPUT_BASED',    
-    #machine_type='n1-standard-4',    
-    #service_account_email='your-service-account@your-project.iam.gserviceaccount.com'  
-<...>
-```
+3. **Write to BigQuery**:
+   - The pipeline writes the processed data to two **BigQuery tables**:
+     - `conversations`
+     - `orders`
+   - Ensures schema compliance and appends new data without overwriting existing records.
 
-Autoscaling will be enabled for Dataflow Streaming Engine even without specifying optional parameters. Workers will scale between 1 and 100 unless maxNumWorkers is specified.
+---
+![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/a40ce3c9fdf15f37a7c7d05fa2aa54cd71c20a5d/Dataflow%20Graph%20View.png)
 
-![1 N3Gf-klbpfYAaC79hOQeuA](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/250cfed1-3fe7-46a6-b0b5-c197b2b2948f)
-
-Execute the code in your second terminal by running the following command: `python streaming-beam-dataflow.py`. This will allow you to start the streaming process using Apache Beam and/or Dataflow.
-
-Executing the provided code (`python send-data-to-pubsub.py` and `python streaming-beam-dataflow.py`) in each terminal will trigger a series of actions:
-- We publish the messages to the Pub/Sub topic.
+Thus, executing the provided code (`python send-data-to-pubsub.py` and `python streaming-beam-dataflow.py`) will trigger a series of actions:
+- Publish the messages to the Pub/Sub topic.
 - The pipeline reads data from a Pub/Sub subscription using the `ReadFromPubSub` transform.
 - The desired fields from the parsed messages are extracted for the "conversations" and "orders" tables using the `beam.Map` transform and lambda functions.
 - The processed "conversations" and "orders" data is written to the respective BigQuery tables using the `WriteToBigQuery` transform.
