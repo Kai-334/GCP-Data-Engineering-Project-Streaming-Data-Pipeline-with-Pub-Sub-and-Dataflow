@@ -103,29 +103,16 @@ The customer_courier_conversations view must include the following fields:
 
 The simulated conversation data which resides in the conversation.json file is uploaded to the GCS bucket.
 
+![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/793b11bc60a5c4187c16d47686035cea8eb2e687/GCS%20bucket.png)
 
+# Pub/Sub: Messaging Bus
+Here we utilize the GCP console to manually set up the Topic and Subscription.
 
+Create a Topic named `topic-conversations-3`:
+![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/c748f3787b2efc645a77e8aef378ac40b25319b0/Pub-Sub%20Topic.png)
 
-# Pub/Sub: Topic and Subscription
-To gain a better understanding of Pub/Sub's functionality, refer to the message lifecycle example, which illustrates how messages are transmitted through the system.
-
-<img src="https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/8f359787-9d7b-432d-b51a-fb56cf8107d6" alt="Image" width="1">
-
-A publisher application sends a message to a Pub/Sub topic. The message is written to storage. Along with writing the message to storage, Pub/Sub delivers the message to all the attached subscriptions of the topic. In this example, it's a single subscription. The subscription sends the message to an attached subscriber application. The subscriber sends an acknowledgment to Pub/Sub that they have processed the message.
-
-We have several options for creating the Pub/Sub topic and subscription:
-
-- Utilize the GCP console to manually set up the Topic and Subscription.
-
-![1 j9P0AkzfCtDNglLFK4v9Cw](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/23107a5b-3fb8-4706-91c2-f4dea26eec64)
-
-![1 ZpJZU_9gZ5muokgMOWpzPA](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/4bab328b-c4d5-4fbf-babd-408a1101d5aa)
-
-- Leverage the provided code in my repository by running the command `python topic-subscription.py`.
-  
-- Employ the Terraform code with the `main.tf` file to automate and control the creation of resources.
-
-Each method has its advantages, and you can choose the one that best suits your preferences and project requirements.
+Create a Subscription named `topic-conversations-3-sub`:
+![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/c748f3787b2efc645a77e8aef378ac40b25319b0/Pub-Sub%20Subscription.png)
 
 # 🔊 Sending Data to Pub/Sub
 We have several options for transmitting data from the bucket to Pub/Sub:
