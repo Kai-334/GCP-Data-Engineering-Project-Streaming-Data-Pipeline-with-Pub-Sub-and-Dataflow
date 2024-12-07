@@ -93,15 +93,23 @@ The customer_courier_conversations view must include the following fields:
 
 `Pub/Sub`: Facilitates the asynchronous publishing of the conversations.json file content to a designated topic. It ensures reliable message delivery and decouples the communication between producers (publishers) and consumers (subscribers).
 
+<img src="https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/ecda05ba2e96cf0ef80b59c8ffa94106b9319a99/how%20pub%20sub%20works.png?raw=true" alt="Image" width="600">
 
 `Dataflow`: Built on Apache Beam, Dataflow enables real-time streaming data processing and transformations. It processes the conversations data and organizes it into two tables: conversations and orders.
 
 `BigQuery`: Serves as the storage for the processed data. BigQuery’s scalability and efficient query capabilities allow for rapid analysis and retrieval of the transformed data.
 
-# 📡 Pub/Sub: Topic and Subscription
+# Google Cloud Storage
+
+The simulated conversation data which resides in the conversation.json file is uploaded to the GCS bucket.
+
+
+
+
+# Pub/Sub: Topic and Subscription
 To gain a better understanding of Pub/Sub's functionality, refer to the message lifecycle example, which illustrates how messages are transmitted through the system.
 
-![1 FKjozGDmbCruoEg8Y3-DFw](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/8f359787-9d7b-432d-b51a-fb56cf8107d6)
+<img src="https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/8f359787-9d7b-432d-b51a-fb56cf8107d6" alt="Image" width="1">
 
 A publisher application sends a message to a Pub/Sub topic. The message is written to storage. Along with writing the message to storage, Pub/Sub delivers the message to all the attached subscriptions of the topic. In this example, it's a single subscription. The subscription sends the message to an attached subscriber application. The subscriber sends an acknowledgment to Pub/Sub that they have processed the message.
 
