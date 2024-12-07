@@ -1,11 +1,10 @@
-# <img width="40" alt="image" src="https://github.com/janaom/gcp-data-engineering-etl-with-composer-dataflow/assets/83917694/60f8f158-3bdc-4b3d-94ae-27a12441e2a3">  GCP Data Engineering Project: Streaming Data Pipeline with Pub/Sub and Apache Beam/Dataflow 📡
+# GCP Data Engineering Project: Streaming Data Pipeline with Pub/Sub and Dataflow 
 
-When it comes to streaming data, Kafka and Flink are popular topics of discussion. However, if you are working with Google Cloud Platform (GCP), it is more likely that you will utilize Pub/Sub, Apache Beam, and Dataflow as your primary streaming services. These tools can be used either standalone or in conjunction with other streaming solutions.
+Having prior experience with Apache Beam for batch processing projects, I was eager to explore its streaming capabilities. On Google Cloud Platform (GCP), streaming solutions often revolve around Pub/Sub, Apache Beam, and Dataflow, which are powerful tools for building real-time data pipelines. These tools can be used independently or integrated with other platforms to address diverse streaming requirements.
 
-[Pub/Sub](https://cloud.google.com/pubsub/docs/overview) is an asynchronous and scalable messaging service that decouples services producing messages from services processing those messages. Pub/Sub is used for streaming analytics and data integration pipelines to load and distribute data. It's equally effective as a messaging-oriented middleware for service integration or as a queue to parallelize tasks.
+Pub/Sub is a scalable, asynchronous messaging service that decouples producers and consumers. It is widely used for tasks like streaming analytics, data integration, and distributing data across pipelines. It also functions effectively as middleware for service integration or as a task-parallelising queue.
 
-[Dataflow](https://cloud.google.com/dataflow/docs/overview) is a Google Cloud service that provides unified stream and batch data processing at scale. Use Dataflow to create data pipelines that read from one or more sources, transform the data, and write the data to a destination. Dataflow is built on the open source Apache Beam project. Apache Beam lets you write pipelines using a language-specific SDK. Apache Beam supports Java, Python, and Go SDKs, as well as multi-language pipelines. Dataflow executes Apache Beam pipelines. If you decide later to run your pipeline on a different platform, such as Apache Flink or Apache Spark, you can do so without rewriting the pipeline code.
-With prior experience in utilizing Beam for batch projects, I was keen to experiment with its streaming functionality. The following is a challenging task I came across and the corresponding solution I developed.
+Dataflow is a fully managed GCP service for unified batch and stream data processing. Built on the open-source Apache Beam framework, Dataflow enables developers to build pipelines that ingest, transform, and output data. Apache Beam’s multi-language support (e.g., Java, Python, and Go) and portability across platforms like Apache Flink or Spark make it highly versatile for diverse data processing needs.
 
 # Problem Description
 
@@ -53,35 +52,36 @@ A sample of the **`conversations.json` file** is shown below:
 
 # Task Description
 
-The task is to build a **data pipeline** that processes this streaming data, aggregates messages into meaningful **conversations**, and splits the data into two BigQuery tables:
-1. **orders Table**:
-   - Contains orderId and cityCode.
-   - Used to track order-level metadata.
+The task is to build a **data pipeline** that processes streaming data and organises it into two separate BigQuery tables:
 
-2. **conversations Table**:
-   - Contains individual messages exchanged between couriers and customers.
+1. **Orders Table**:
+   - Stores `orderId` and `cityCode`.
+   - Tracks metadata related to each order.
 
-After the data is stored in these two tables, create a unified **BigQuery view** called **`customer_courier_conversations`**. This view combines data from the `orders` and `conversations` tables and performs **aggregation and grouping** to provide meaningful insights at the conversation level.
+2. **Conversations Table**:
+   - Stores individual messages exchanged between couriers and customers.
+
+After storing the data, create a **BigQuery view** called **`customer_courier_conversations`**. This view combines data from the two tables, grouping it to provide insights at the conversation level.
 
 ---
 
 ## Output Schema
 
-The customer_courier_conversations view must include the following fields:
+The `customer_courier_conversations` view must include the following fields:
 
 | Field Name                     | Description                                                       |
 |--------------------------------|-------------------------------------------------------------------|
-| order_id                     | Unique identifier for the order.                                 |
-| city_code                    | City where the delivery is scheduled.                            |
-| first_courier_message        | Timestamp of the first message sent by the courier.              |
-| first_customer_message       | Timestamp of the first message sent by the customer.             |
-| num_messages_courier         | Total number of messages sent by the courier in the conversation.|
-| num_messages_customer        | Total number of messages sent by the customer in the conversation.|
-| first_message_by             | Indicates who sent the first message (courier or customer).      |
-| conversation_started_at      | Timestamp of the first message in the conversation.              |
-| first_responsetime_delay_seconds | Time elapsed (in seconds) between the first message and the first response. |
-| last_message_time            | Timestamp of the last message in the conversation.               |
-| last_message_order_stage     | The order stage (orderStage) during the last message.          |
+| order_id                       | Unique identifier for the order.                                 |
+| city_code                      | City where the delivery is scheduled.                            |
+| first_courier_message          | Timestamp of the first message sent by the courier.              |
+| first_customer_message         | Timestamp of the first message sent by the customer.             |
+| num_messages_courier           | Total number of messages sent by the courier.                    |
+| num_messages_customer          | Total number of messages sent by the customer.                   |
+| first_message_by               | Indicates who sent the first message (courier or customer).      |
+| conversation_started_at        | Timestamp of the first message in the conversation.              |
+| first_responsetime_delay_seconds | Time (in seconds) between the first message and the first response. |
+| last_message_time              | Timestamp of the last message in the conversation.               |
+| last_message_order_stage       | The order stage (`orderStage`) during the last message.          |
 
 ---
 
@@ -169,99 +169,61 @@ Thus, executing the provided code (`python send-data-to-pubsub.py` and `python s
 - The desired fields from the parsed messages are extracted for the "conversations" and "orders" tables using the `beam.Map` transform and lambda functions.
 - The processed "conversations" and "orders" data is written to the respective BigQuery tables using the `WriteToBigQuery` transform.
 
-# ⏯️ BigQuery Streaming Buffer
-By default, BigQuery stores streaming data in a special storage location called the "streaming buffer." The streaming buffer is a temporary storage area that holds the incoming data for a short period before it is fully committed and becomes part of the permanent table.
+# BigQuery Streaming Buffer
+By default, BigQuery stores streaming data temporarily in a "streaming buffer." This buffer holds incoming data for a short time before it is fully committed to the main table.
 
-![1 g4PjtluUvzrwRtpdpEziEA](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/0d5b4e86-c01b-485b-b7c5-8a88d07e4f3a)
+When streaming stops, BigQuery begins flushing the buffered data into the table’s permanent storage. During this process, the data is reorganised and compressed to ensure it is stored efficiently and accurately.
 
+The time for data to fully move from the streaming buffer to the table can vary, typically taking a few minutes to up to 90 minutes, depending on factors like data volume and BigQuery's processing capacity.
 
-When you stop streaming data, the data in the streaming buffer is no longer continuously updated. BigQuery then starts the process of flushing the buffered data into the main table storage. The data is also reorganized and compressed for efficient storage. This process ensures data consistency and integrity before fully committing it to the table.
-
-The time it takes for the streamed data to be fully committed and visible in the table depends on various factors, including the size of the buffer, the volume of data, and BigQuery's internal processing capacity. Typically, it takes a few minutes or up to 90 minutes for the streaming buffer to be completely flushed and the data to be visible in the table.
-
-In the provided example, the updated information becomes visible in the "Storage info" section.
-
-![1 NDYjPiI7HAgPbLboYfIVRw](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/ceb1dcfd-22a2-4073-b237-3021b0e86dc0)
+![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/11cd9022f48ec6266f29b43e384df3e1948b72c4/BigQuery%20Streaming%20Buffer.png)
 
 
-# 🧮 Querying the Final Table
-The final step involves creating the "customer_courier_conversations" table. In this case, we will generate a [view](https://cloud.google.com/bigquery/docs/views-intro), which is a virtual table defined by a SQL query. The custom SQL code will help transform the data to meet the specific task requirements.
+# Querying the Final Table
+The SQL view `customer_courier_conversations_view` transforms raw data from the `orders` and `conversations` tables into a **conversation-level summary table**. This summary provides key insights about each conversation between customers and couriers, including details such as the first message, response times, and message counts.
 
-![1 7SFCGTdJLBsjC1I7am3h7Q](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/b7b88fdd-0272-401c-ab25-e754c5345a20)
+![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/9c6aa07bb645eac2dfe40705c55f15efcbd4ecea/final%20table.png)
+---
 
+## Purpose of the View
 
-Views are virtual references to a set of data, offering reusable access without physically storing the data. [Materialized views](https://cloud.google.com/bigquery/docs/materialized-views-intro), on the other hand, are defined using SQL like regular views but physically store the data. However, they come with [limitations](https://cloud.google.com/bigquery/docs/materialized-views-intro#comparison) in query support. Due to the substantial size of my query, opting for a regular view was the more suitable choice in this case.
+The view consolidates data from the `orders` and `conversations` tables to produce the following outputs:
 
-Once the streaming process has been initiated, you can execute the saved view after a brief interval.
+### 1. **Conversation Metadata**
+- **`order_id`**: Links the conversation to its associated order.
+- **`city_code`**: Indicates the delivery location for the order.
 
-```sql
-SELECT * FROM `your-project-id.dataset.view`
-```
+### 2. **First Messages**
+- **`first_courier_message`**: Timestamp of the first message sent by the courier.
+- **`first_customer_message`**: Timestamp of the first message sent by the customer.
+- **`first_message_by`**: Identifies whether the courier or customer initiated the conversation.
 
-Let's examine the first row from the results by extracting all messages associated with the "orderId" 77656162 from the "conversations.json" file.
+### 3. **Message Counts**
+- **`num_messages_courier`**: Total number of messages sent by the courier.
+- **`num_messages_customer`**: Total number of messages sent by the customer.
 
-![1 G-LpAKxAmGHTShp743ed7A](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/74e59371-a38f-42ff-a6e6-e80dfa871b1b)
+### 4. **Timings**
+- **`conversation_started_at`**: Timestamp of the first message in the conversation.
+- **`first_responsetime_delay_seconds`**: Time difference (in seconds) between the first message and the first response.
 
+### 5. **Last Message Information**
+- **`last_message_time`**: Timestamp of the last message in the conversation.
+- **`last_message_order_stage`**: The `orderStage` associated with the last message.
 
-The analysis yielded the following results: a total of 5 messages were identified. The conversation commenced with a Courier message in Rome at 10:04:46. The Customer responded after 42 seconds, at 10:05:28. The final message was received from the Courier at 10:06:35, and the last message order stage was recorded as "FAILED".
+---
 
-```json
-{"senderAppType": "Courier Android", "courierId": 45035010, "fromId": 45035010, "toId": 57270753, "chatStartedByMessage": true, "orderId": 77656162, "orderStage": "AWAITING_PICKUP", "customerId": 57270753, "messageSentTime": "2024-02-01T10:04:46Z"}
-{"orderId": 77656162, "cityCode": "ROM"}
-{"senderAppType": "Customer iOS", "customerId": 57270753, "fromId": 57270753, "toId": 45035010, "chatStartedByMessage": false, "orderId": 77656162, "orderStage": "DELAYED", "courierId": 45035010, "messageSentTime": "2024-02-01T10:05:28Z"}
-{"senderAppType": "Courier Android", "courierId": 45035010, "fromId": 45035010, "toId": 57270753, "chatStartedByMessage": false, "orderId": 77656162, "orderStage": "ACCEPTED", "customerId": 57270753, "messageSentTime": "2024-02-01T10:05:31Z"}
-{"senderAppType": "Customer iOS", "customerId": 57270753, "fromId": 57270753, "toId": 45035010, "chatStartedByMessage": false, "orderId": 77656162, "orderStage": "DELAYED", "courierId": 45035010, "messageSentTime": "2024-02-01T10:06:16Z"}
-{"senderAppType": "Courier Android", "courierId": 45035010, "fromId": 45035010, "toId": 57270753, "chatStartedByMessage": false, "orderId": 77656162, "orderStage": "FAILED", "customerId": 57270753, "messageSentTime": "2024-02-01T10:06:35Z"}
-```
+## What the View Outputs
 
-Please note that, in my case, the time difference between the first and last messages was only 2 minutes, resulting in a relatively quick analysis. As new data is continuously streaming into the source, the view is automatically updated in real-time to reflect the changes. This means that whenever you query the view, you will get the most up-to-date data that matches the defined criteria.
+The resulting view is a **conversation-level summary** with one row per `order_id`. It combines information about the order and all related messages, making it ready for analytics or further processing.
 
-To gain further insights into the dynamic nature of the streaming process, let's examine additional examples and observe how the results evolve over time.
+### Example Use Cases:
+1. **Response Time Insights**: Measure and compare response times across different city locations or order stages to identify areas requiring improved communication efficiency.
+2. **Conversation Flow Analysis**: Analyse how communication dynamics (e.g., who sends the first message and frequency of follow-ups) vary across order stages such as "In Progress" or "Delivered."
+3. **Delivery Process Monitoring**: Track the progression of conversations through order stages to identify patterns in communication during critical stages like "Out for Delivery" or "Awaiting Pickup."
 
-![1 QRnvMHwBdOKcmfP11bWeXw](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/bbfdd566-6cb2-49ea-ba0f-110ababd7f60)
+# Credits
 
-
-In the first example, the conversation associated with "orderId" 66096282 in Tokyo commenced with a Courier message at 10:38:50. At this point, no response from the Customer has been received. The last message order stage is shown as "OUT_FOR_DELIVERY".
-
-To observe any changes, let's execute the view once again and compare the results.
-
-![1 zROM0ndny_c4DQRkz0mTdg](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/289c77a2-37e4-4650-add1-bd0bfa0f6e13)
-
-
-A Customer reply was received at 10:39:30. Although the view indicates that the last message was sent at 10:39:45 with the status "PENDING", a closer examination of the JSON file reveals that the actual last message will be sent at 10:41:07, which hasn't been received yet. Additionally, expect the number of messages to be updated shortly.
-
-Let's execute the view one more time.
-
-![1 jV6tijubvOGB6-xjfQLTbQ](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/205087dc-4963-427d-95a1-be4a552aae1b)
-
-Here we see that all 5 messages have been received, and the last message order stage now is "ACCEPTED". 🥳
-
-```json
-{"senderAppType": "Courier Android", "courierId": 64897260, "fromId": 64897260, "toId": 55461000, "chatStartedByMessage": true, "orderId": 66096282, "orderStage": "OUT_FOR_DELIVERY", "customerId": 55461000, "messageSentTime": "2024-02-01T10:38:50Z"}
-{"orderId": 66096282, "cityCode": "TOK"}
-{"senderAppType": "Customer iOS", "customerId": 55461000, "fromId": 55461000, "toId": 64897260, "chatStartedByMessage": false, "orderId": 66096282, "orderStage": "ACCEPTED", "courierId": 64897260, "messageSentTime": "2024-02-01T10:39:30Z"}
-{"senderAppType": "Courier Android", "courierId": 64897260, "fromId": 64897260, "toId": 55461000, "chatStartedByMessage": false, "orderId": 66096282, "orderStage": "PENDING", "customerId": 55461000, "messageSentTime": "2024-02-01T10:39:45Z"}
-{"senderAppType": "Customer iOS", "customerId": 55461000, "fromId": 55461000, "toId": 64897260, "chatStartedByMessage": false, "orderId": 66096282, "orderStage": "IN_PROGRESS", "courierId": 64897260, "messageSentTime": "2024-02-01T10:40:37Z"}
-{"senderAppType": "Courier Android", "courierId": 64897260, "fromId": 64897260, "toId": 55461000, "chatStartedByMessage": false, "orderId": 66096282, "orderStage": "ACCEPTED", "customerId": 55461000, "messageSentTime": "2024-02-01T10:41:07Z"}
-```
-
-
-To experiment with larger data, you can access the `generate-the-data.py` code on my GitHub repository. This code allows you to generate additional conversations, enabling you to test the project's scalability.🤖
-
-If you have any questions or would like to discuss streaming, feel free to connect with me on [LinkedIn](https://www.linkedin.com/in/jana-polianskaja/)! I'm always open to sharing ideas and engaging in insightful conversations.😊
-
-Throughout this article, I've referred to the following sources for specific details and concepts:
-
-https://cloud.google.com/dataflow/docs/overview
-
-https://cloud.google.com/pubsub/docs/overview
-
-https://beam.apache.org/documentation/runners/dataflow/
-
-https://beam.apache.org/documentation/runners/direct/
-
-https://cloud.google.com/bigquery/docs/views-intro
-
+This project was inspired by [Original Repository Name](https://github.com/janaom/gcp-de-project-streaming-pubsub-beam-dataflow/tree/main).
 
 
 
