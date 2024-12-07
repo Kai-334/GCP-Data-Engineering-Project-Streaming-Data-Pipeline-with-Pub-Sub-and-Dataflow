@@ -7,93 +7,96 @@ When it comes to streaming data, Kafka and Flink are popular topics of discussio
 [Dataflow](https://cloud.google.com/dataflow/docs/overview) is a Google Cloud service that provides unified stream and batch data processing at scale. Use Dataflow to create data pipelines that read from one or more sources, transform the data, and write the data to a destination. Dataflow is built on the open source Apache Beam project. Apache Beam lets you write pipelines using a language-specific SDK. Apache Beam supports Java, Python, and Go SDKs, as well as multi-language pipelines. Dataflow executes Apache Beam pipelines. If you decide later to run your pipeline on a different platform, such as Apache Flink or Apache Spark, you can do so without rewriting the pipeline code.
 With prior experience in utilizing Beam for batch projects, I was keen to experiment with its streaming functionality. The following is a challenging task I came across and the corresponding solution I developed.
 
-# 🚀 Data Pipeline Challenge
+# Problem Description
 
-We have a "conversations.json" file containing the "customer_courier_chat_messages" event data, which includes information about individual messages exchanged between customers and couriers through the in-app chat. A sample of the event data is provided .
+![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/18aeb28d0f53827b656adb75ba62db8a57c73b43/Scenario%20Image.png)
+
+We are tasked with processing simulated **"customer_courier_chat_messages"** data, which records individual chat messages exchanged between customers and couriers through an in-app chat system. Each message contains metadata such as sender type, order information, and timestamp.
+
+In addition to the chat messages, we have access to an **"orders" event**, which maps each unique `orderId` to its corresponding `cityCode`. This **orders event** appears only once per `orderId` and provides important context for the conversation data.
+
+---
+
+## Simulated Data Generation
+
+To simulate this data, a Python script was used to generate **400 conversations**. Here's how the simulation works:
+
+1. **Conversations**:
+   - Each conversation starts with a message sent by either the **Customer** or **Courier**.
+   - The first message is followed by an **orders event** that includes the `orderId` and `cityCode`.
+   - Subsequent messages are exchanged chronologically between the **Customer** and **Courier**.
+   - Each conversation contains **2 to 5 messages** in total.
+
+2. **Orders Data**:
+   - Each unique `orderId` is paired with a single **orders event** that includes the `cityCode`.
+   - This event only appears once per `orderId`, typically as the second message in a conversation.
+
+---
+
+## Sample Simulated Data
+
+A sample of the **`conversations.json` file** is shown below:
 
 ```json
-{
-    "senderAppType": "Courier Android",
-    "courierId": 61404437,
-    "fromId": 61404437,
-    "toId": 40874303,
-    "chatStartedByMessage": true,
-    "orderId": 10000632,
-    "orderStage": "IN_PROGRESS",
-    "customerId": 40874303,
-    "messageSentTime": "2024-02-01T10:00:00Z"
-},
-{
+{"senderAppType": "Courier Android", "courierId": 17935441, "fromId": 17935441, "toId": 31685802, "chatStartedByMessage": true, "orderId": 82414506, "orderStage": "RETURNED", "customerId": 31685802, "messageSentTime": "2024-02-01T10:00:56Z"}
+{"orderId": 82414506, "cityCode": "IST"}
+{"senderAppType": "Customer iOS", "customerId": 31685802, "fromId": 31685802, "toId": 17935441, "chatStartedByMessage": false, "orderId": 82414506, "orderStage": "IN_PROGRESS", "courierId": 17935441, "messageSentTime": "2024-02-01T10:01:07Z"}
+{"senderAppType": "Customer iOS", "customerId": 85223204, "fromId": 85223204, "toId": 68924298, "chatStartedByMessage": true, "orderId": 13129173, "orderStage": "IN_PROGRESS", "courierId": 68924298, "messageSentTime": "2024-02-01T10:01:53Z"}
+{"orderId": 13129173, "cityCode": "IST"}
+{"senderAppType": "Courier Android", "courierId": 37614487, "fromId": 37614487, "toId": 56464808, "chatStartedByMessage": true, "orderId": 79545352, "orderStage": "OUT_FOR_DELIVERY", "customerId": 56464808, "messageSentTime": "2024-02-01T10:02:30Z"}
+{"orderId": 79545352, "cityCode": "SYD"}
+{"senderAppType": "Courier Android", "courierId": 68924298, "fromId": 68924298, "toId": 85223204, "chatStartedByMessage": false, "orderId": 13129173, "orderStage": "AWAITING_PICKUP", "customerId": 85223204, "messageSentTime": "2024-02-01T10:02:43Z"}
+{"senderAppType": "Courier Android", "courierId": 56230356, "fromId": 56230356, "toId": 57998724, "chatStartedByMessage": true, "orderId": 44410052, "orderStage": "ACCEPTED", "customerId": 57998724, "messageSentTime": "2024-02-01T10:03:01Z"}
+{"orderId": 44410052, "cityCode": "BER"}
 ...
-}
 ```
 
-Additionally, you have access to the "orders" event, which contains the "orderId" and "cityCode" fields.
+# Task Description
 
-```json
-{
-    "orderId": 10000632,
-    "cityCode": "MAD"
-},
-{
-...
-}
-```
+The task is to build a **data pipeline** that processes this streaming data, aggregates messages into meaningful **conversations**, and splits the data into two BigQuery tables:
+1. **orders Table**:
+   - Contains orderId and cityCode.
+   - Used to track order-level metadata.
 
-Using the prepared data, we will simulate the streaming of Courier and Customer conversations. We have 400 conversations in total, with the first message coming from either the Courier or the Customer. This initial message is followed by another important message that contains the "orderId" and "cityCode". Subsequent messages will then appear in chronological order, with each conversation consisting of 2–5 messages. If you're interested in the original data generation process, you can find the code on my GitHub repository. Here is an example of a complete conversation:
+2. **conversations Table**:
+   - Contains individual messages exchanged between couriers and customers.
 
-```json
-{"senderAppType": "Courier Android", "courierId": 61404437, "fromId": 61404437, "toId": 40874303, "chatStartedByMessage": true, "orderId": 10000632, "orderStage": "IN_PROGRESS", "customerId": 40874303, "messageSentTime": "2024-02-01T10:00:00Z"}
-{"orderId": 10000632, "cityCode": "MAD"}
-<...>
-{"senderAppType": "Customer iOS", "customerId": 40874303, "fromId": 40874303, "toId": 61404437, "chatStartedByMessage": false, "orderId": 10000632, "orderStage": "FAILED", "courierId": 61404437, "messageSentTime": "2024-02-01T10:08:00Z"}
-<...>
-{"senderAppType": "Courier Android", "courierId": 61404437, "fromId": 61404437, "toId": 40874303, "chatStartedByMessage": false, "orderId": 10000632, "orderStage": "FAILED", "customerId": 40874303, "messageSentTime": "2024-02-01T10:21:00Z"}
-<...>
-{"senderAppType": "Customer iOS", "customerId": 40874303, "fromId": 40874303, "toId": 61404437, "chatStartedByMessage": false, "orderId": 10000632, "orderStage": "ACCEPTED", "courierId": 61404437, "messageSentTime": "2024-02-01T10:35:00Z"}
-```
+After the data is stored in these two tables, create a unified **BigQuery view** called **`customer_courier_conversations`**. This view combines data from the `orders` and `conversations` tables and performs **aggregation and grouping** to provide meaningful insights at the conversation level.
 
-Your task is to build a data pipeline to aggregate individual messages into conversations. Take into consideration that a conversation is unique per order. We aim to split the data into two tables: "conversations" and "orders". This separation will facilitate future analytics and data processing. The final table "customer_courier_conversations" should include the following required fields:
+---
 
-```
-● order_id
-● city_code
-● first_courier_message: Timestamp of the first courier message
-● first_customer_message: Timestamp of the first customer message
-● num_messages_courier: Number of messages sent by courier
-● num_messages_customer: Number of messages sent by customer
-● first_message_by: The first message sender (courier or customer)
-● conversation_started_at: Timestamp of the first message in the conversation
-● first_responsetime_delay_seconds: Time (in secs) elapsed until the first message was responded
-● last_message_time: Timestamp of the last message sent
-● last_message_order_stage: The stage of the order when the last message was sent
-```
+## Output Schema
 
-In this project, I will present my solution and provide a detailed, step-by-step guide on how to accomplish this task. Our focus will be on building a streaming pipeline using various GCP services, which include:
+The customer_courier_conversations view must include the following fields:
 
-![20240423_181509](https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/cf670f64-eb28-4c9e-8d17-c4fb0e8bb36f)
+| Field Name                     | Description                                                       |
+|--------------------------------|-------------------------------------------------------------------|
+| order_id                     | Unique identifier for the order.                                 |
+| city_code                    | City where the delivery is scheduled.                            |
+| first_courier_message        | Timestamp of the first message sent by the courier.              |
+| first_customer_message       | Timestamp of the first message sent by the customer.             |
+| num_messages_courier         | Total number of messages sent by the courier in the conversation.|
+| num_messages_customer        | Total number of messages sent by the customer in the conversation.|
+| first_message_by             | Indicates who sent the first message (courier or customer).      |
+| conversation_started_at      | Timestamp of the first message in the conversation.              |
+| first_responsetime_delay_seconds | Time elapsed (in seconds) between the first message and the first response. |
+| last_message_time            | Timestamp of the last message in the conversation.               |
+| last_message_order_stage     | The order stage (orderStage) during the last message.          |
+
+---
+
+# Tech Stack Architecture
+
+![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/18aeb28d0f53827b656adb75ba62db8a57c73b43/Tech%20Stack%20Architecture.png)
+
+`Google Cloud Storage (GCS)`: Acts as the storage solution for the conversations.json file. GCS provides reliable, scalable object storage, ensuring the data is securely stored and accessible for processing.
+
+`Pub/Sub`: Facilitates the asynchronous publishing of the conversations.json file content to a designated topic. It ensures reliable message delivery and decouples the communication between producers (publishers) and consumers (subscribers).
 
 
+`Dataflow`: Built on Apache Beam, Dataflow enables real-time streaming data processing and transformations. It processes the conversations data and organizes it into two tables: conversations and orders.
 
-
-<img width="20" alt="image" src="https://github.com/janaom/gcp-de-project-connect-four-with-python-dataflow/assets/83917694/0887957d-db1b-4938-a9fa-f497fcebbeff"> Google Cloud Storage (GCS) is used to store the "conversations.json" file. It provides reliable and scalable object storage for your data.
-
-<img width="20" alt="image" src="https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/c0f07cb2-e512-48da-b201-19c6e255c6c0"> Pub/Sub is used to publish the contents of the "conversations.json" file to a specified topic, allowing for asynchronous communication and decoupling of message producers and consumers. It ensures reliable and scalable message delivery.
-
-
-<img width="20" alt="image" src="https://github.com/janaom/gcp-de-project-connect-four-with-python-dataflow/assets/83917694/5df502de-1936-42fb-a3d5-2fa7cf0c5723"> Dataflow, built on the Apache Beam framework, is used to construct and run a streaming data processing pipeline. It facilitates the real-time transformation of conversations data. By leveraging Dataflow, we can effectively divide the data into two tables: "conversations" and "orders".
-
-
-<img width="20" alt="image" src="https://github.com/janaom/gcp-de-project-connect-four-with-python-dataflow/assets/83917694/7c95b56f-a1fc-49b3-8e96-ed607f2094ea"> BigQuery is used to store the processed conversations data. It provides a scalable and efficient platform for querying and analyzing the streaming data, allowing for insightful data retrieval and analysis.
-
-<img width="20" alt="image" src="https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/dd989c11-cbb0-43c4-814c-6237e23550f1"> Terraform is used to define and provision a GCS bucket, Pub/Sub topic, subscription, and BigQuery dataset with tables. It enables the automation of resource creation, ensuring a consistent and reproducible infrastructure setup for efficient data storage, messaging, and analysis.
-
-
-# <img width="20" alt="image" src="https://github.com/janaom/gcp-de-project-streaming-beam-dataflow-pubsub/assets/83917694/dd989c11-cbb0-43c4-814c-6237e23550f1">  Terraform
-To streamline the process, I've included Terraform files that enable the automation of several components within the GCP environment. By utilizing Terraform, you can efficiently create the following resources: GCS bucket, bucket object, Pub/Sub topic, subscription, BigQuery dataset, tables. Incorporating Terraform into your workflow is an excellent opportunity to explore Infrastructure as Code (IaaC) or reinforce your existing knowledge. The files are available in the Terraform folder on my GitHub account. Alternatively, you can manually set up these services if you prefer not to use Terraform automation.
-
-When working within GCP, there's no need to install Terraform. Simply execute the following basic commands: `terraform init`, `terraform plan`, `terraform apply`, and `terraform destroy`.
-For more advanced parameters and customization options, refer to the [Terraform Registry](https://registry.terraform.io/).
+`BigQuery`: Serves as the storage for the processed data. BigQuery’s scalability and efficient query capabilities allow for rapid analysis and retrieval of the transformed data.
 
 # 📡 Pub/Sub: Topic and Subscription
 To gain a better understanding of Pub/Sub's functionality, refer to the message lifecycle example, which illustrates how messages are transmitted through the system.
