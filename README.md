@@ -83,6 +83,37 @@ The `customer_courier_conversations` view must include the following fields:
 | last_message_time              | Timestamp of the last message in the conversation.               |
 | last_message_order_stage       | The order stage (`orderStage`) during the last message.          |
 
+## Purpose and Outputs of the View
+
+This view consolidates data from the `orders` and `conversations` tables to provide a **conversation-level summary** for analytics and operational insights, producing one row per `order_id`. It combines metadata, message details, and timing metrics related to each conversation, structured for ease of analysis and further processing.
+
+### Key Outputs:
+1. **Conversation Metadata**
+   - **`order_id`**: Links the conversation to its associated order.
+   - **`city_code`**: Indicates the delivery location for the order.
+
+2. **First Messages**
+   - **`first_courier_message`**: Timestamp of the first message sent by the courier.
+   - **`first_customer_message`**: Timestamp of the first message sent by the customer.
+   - **`first_message_by`**: Identifies whether the courier or customer initiated the conversation.
+
+3. **Message Counts**
+   - **`num_messages_courier`**: Total number of messages sent by the courier.
+   - **`num_messages_customer`**: Total number of messages sent by the customer.
+
+4. **Timings**
+   - **`conversation_started_at`**: Timestamp of the first message in the conversation.
+   - **`first_responsetime_delay_seconds`**: Time difference (in seconds) between the first message and the first response.
+
+5. **Last Message Information**
+   - **`last_message_time`**: Timestamp of the last message in the conversation.
+   - **`last_message_order_stage`**: The `orderStage` associated with the last message.
+
+### Example Use Cases:
+- **Response Time Insights**: Measure and compare response times across different city locations or order stages to identify areas requiring improved communication efficiency.
+- **Conversation Flow Analysis**: Analyse how communication dynamics (e.g., who sends the first message and frequency of follow-ups) vary across order stages such as "In Progress" or "Delivered."
+- **Delivery Process Monitoring**: Track the progression of conversations through order stages to identify patterns in communication during critical stages like "Out for Delivery" or "Awaiting Pickup."
+
 ---
 
 # Tech Stack Architecture
@@ -184,42 +215,6 @@ The SQL view `customer_courier_conversations_view` transforms raw data from the 
 
 ![](https://github.com/Kai-334/GCP-Data-Engineering-Project-Streaming-Data-Pipeline-with-Pub-Sub-and-Dataflow/blob/9c6aa07bb645eac2dfe40705c55f15efcbd4ecea/final%20table.png)
 ---
-
-## Purpose of the View
-
-The view consolidates data from the `orders` and `conversations` tables to produce the following outputs:
-
-### 1. **Conversation Metadata**
-- **`order_id`**: Links the conversation to its associated order.
-- **`city_code`**: Indicates the delivery location for the order.
-
-### 2. **First Messages**
-- **`first_courier_message`**: Timestamp of the first message sent by the courier.
-- **`first_customer_message`**: Timestamp of the first message sent by the customer.
-- **`first_message_by`**: Identifies whether the courier or customer initiated the conversation.
-
-### 3. **Message Counts**
-- **`num_messages_courier`**: Total number of messages sent by the courier.
-- **`num_messages_customer`**: Total number of messages sent by the customer.
-
-### 4. **Timings**
-- **`conversation_started_at`**: Timestamp of the first message in the conversation.
-- **`first_responsetime_delay_seconds`**: Time difference (in seconds) between the first message and the first response.
-
-### 5. **Last Message Information**
-- **`last_message_time`**: Timestamp of the last message in the conversation.
-- **`last_message_order_stage`**: The `orderStage` associated with the last message.
-
----
-
-## What the View Outputs
-
-The resulting view is a **conversation-level summary** with one row per `order_id`. It combines information about the order and all related messages, making it ready for analytics or further processing.
-
-### Example Use Cases:
-1. **Response Time Insights**: Measure and compare response times across different city locations or order stages to identify areas requiring improved communication efficiency.
-2. **Conversation Flow Analysis**: Analyse how communication dynamics (e.g., who sends the first message and frequency of follow-ups) vary across order stages such as "In Progress" or "Delivered."
-3. **Delivery Process Monitoring**: Track the progression of conversations through order stages to identify patterns in communication during critical stages like "Out for Delivery" or "Awaiting Pickup."
 
 # Credits
 
